@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: netflix_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: netflix_user
+      POSTGRES_PASSWORD: netflix_password
+      POSTGRES_DB: netflix_db
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netflix_user -d netflix_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - netflix_network
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: netflix_app
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data:ro
+      - ./alembic:/app/alembic
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://netflix_user:netflix_password@db:5432/netflix_db
+      SECRET_KEY: ${SECRET_KEY:-your-super-secret-key-change-in-production}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - netflix_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  netflix_network:
+    driver: bridge
